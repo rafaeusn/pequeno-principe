@@ -1,9 +1,10 @@
 import p5 from "p5";
+
 export default class Prince {
   constructor(s, planet, godImage) {
     this.s = s;
     this.angle = 0;
-    this.orbitRadius = planet.r + 30;
+    this.orbitRadius = planet.r + 10;
     this.speed = 0.02;
     this.pos = s.createVector(planet.x + this.orbitRadius, planet.y);
     this.vel = s.createVector(0, 0);
@@ -22,6 +23,7 @@ export default class Prince {
     } else {
       this.pos.add(this.vel);
     }
+
     this.trail.push(this.pos.copy());
     if (this.trail.length > this.maxTrailLength) this.trail.shift();
   }
@@ -29,6 +31,8 @@ export default class Prince {
   show() {
     const s = this.s;
     if (!this.godImage) return;
+
+    // Traço do personagem
     if (this.onPlanet) {
       for (let i = 0; i < this.trail.length; i++) {
         const pos = this.trail[i];
@@ -37,10 +41,12 @@ export default class Prince {
         const trailPos = p5.Vector.add(pos, offset);
         const alpha = s.map(i, 0, this.trail.length, 20, 750);
         s.noStroke();
-        s.fill(255,255,100,alpha);
+        s.fill(255, 255, 100, alpha);
         s.ellipse(trailPos.x, trailPos.y, 3);
       }
     }
+
+    // Personagem
     s.push();
     s.translate(this.pos.x, this.pos.y);
     s.rotate(this.angle - s.HALF_PI + s.PI);
@@ -66,7 +72,7 @@ export default class Prince {
   land(planet) {
     this.planet = planet;
     this.angle = 0;
-    this.orbitRadius = planet.r + 30;
+    this.orbitRadius = planet.r + 10;
     this.onPlanet = true;
   }
 }
