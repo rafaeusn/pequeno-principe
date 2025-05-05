@@ -4,7 +4,7 @@ export default class Prince {
   constructor(s, planet, godImage) {
     this.s = s;
     this.angle = 0;
-    this.orbitRadius = planet.r + 10;
+    this.orbitRadius = planet.r + (planet.r <= 43 ? 20 : 10); // ajuste aqui
     this.speed = 0.02;
     this.pos = s.createVector(planet.x + this.orbitRadius, planet.y);
     this.vel = s.createVector(0, 0);
@@ -53,6 +53,7 @@ export default class Prince {
     s.imageMode(s.CENTER);
     s.image(this.godImage, 0, 0, 50, 50);
     s.pop();
+    
   }
 
   launch() {
@@ -72,7 +73,13 @@ export default class Prince {
   land(planet) {
     this.planet = planet;
     this.angle = 0;
-    this.orbitRadius = planet.r + 10;
+    this.orbitRadius = planet.r + (planet.r <= 43 ? 20 : 10); // reaplica ajuste
+  
+    // Atualiza imediatamente a posição após pousar
+    this.pos.x = this.planet.x + this.s.cos(this.angle) * this.orbitRadius;
+    this.pos.y = this.planet.y + this.s.sin(this.angle) * this.orbitRadius;
+  
     this.onPlanet = true;
   }
+  
 }
