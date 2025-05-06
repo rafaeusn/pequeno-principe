@@ -7,7 +7,21 @@ export default class Planet {
     this.rotation = 0;
     this.opacity = isAppearing ? 0 : 255;
     this.isAppearing = isAppearing;
-    this.img = img; // nova propriedade para imagem
+    this.img = img;
+  }
+
+  // Resetar planeta para reutilização
+  reset(fromPlanet = null) {
+    if (fromPlanet) {
+      const angle = this.s.random(this.s.PI / 4, 3 * this.s.PI / 4);
+      const distance = this.s.random(400, 600);
+      this.x = fromPlanet.x + this.s.cos(angle) * distance;
+      this.y = fromPlanet.y - this.s.sin(angle) * distance;
+      this.r = this.s.random(60, 100);
+      this.rotation = 0;
+      this.opacity = 255;
+      this.isAppearing = false;
+    }
   }
 
   update(currentPlanet, prince, rotationSpeed = 0) {

@@ -1,10 +1,26 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import p5 from "p5";
 import Prince from './Prince';
 import Planet from './Planet';
 
 const Game = () => {
   const sketchRef = useRef();
+  const [audio] = useState(new Audio('/assets/music.mp3')); // Carregar o áudio
+
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      audio.play().catch((error) => {
+        console.error("Erro ao tentar tocar o áudio: ", error);
+      });
+      window.removeEventListener("click", handleUserInteraction);
+    };
+  
+    window.addEventListener("click", handleUserInteraction);
+  
+    return () => {
+      window.removeEventListener("click", handleUserInteraction);
+    };
+  }, [audio]);
 
   useEffect(() => {
     const phrases = [
@@ -19,12 +35,13 @@ const Game = () => {
 
     let godImage;
     let planetImage;
+    let awardImage;
+    let energyImage;
+    let stars = [];  // Array de estrelas
 
     const p = new p5((s) => {
       let currentPlanet, nextPlanet, prince;
       let transitioning = false;
-      let stars = [];
-      const numStars = 1000;
       let score = 0;
       let rotationSpeed = 0.01;
       let timeOutsideOrbit = 0;
@@ -34,73 +51,62 @@ const Game = () => {
       let startFadeOut = false;
       let camZoom = 1;
       let targetZoom = 1;
+
+      // Frase animada
+      let fullMessage = "";
       let message = "";
       let messageVisible = false;
-      let messageStartTime = 0;
-      let messageDuration = 3000;
       let messageAlpha = 1;
       let fadeOutMessage = false;
+      let charIndex = 0;  
 
       s.setup = () => {
-        s.createCanvas(s.windowWidth, s.windowHeight);
-        s.angleMode(s.RADIANS);
-        s.ellipseMode(s.CENTER);
-
-        for (let i = 0; i < numStars; i++) {
-          stars.push(createStar());
+        s.createCanvas(s.windowWidth, s.windowHeight);  // Garantir que o canvas ocupe toda a tela
+        
+        // Gerar as estrelas no fundo
+        for (let i = 0; i < 1000; i++) {
+          stars.push(new Star(s.random(s.width), s.random(s.height), s.random(255), s.random(0.1, 3), s.random(1)));
         }
+      };
 
-        s.loadImage("/assets/planeta.png", (img) => {
-          planetImage = img;
-          s.loadImage("/assets/coroa.png", (godImg) => {
-            godImage = godImg;
-            currentPlanet = new Planet(s, s.width / 2, s.height / 2, 100, false, planetImage);
-            nextPlanet = Planet.generateNext(s, currentPlanet, planetImage);
-            prince = new Prince(s, currentPlanet, godImage);
+      // Função para carregar todas as imagens
+      const loadImages = () => {
+        return new Promise((resolve, reject) => {
+          s.loadImage("/assets/award.png", (awardImg) => {
+            awardImage = awardImg;
+            s.loadImage("/assets/planeta.png", (planetImg) => {
+              planetImage = planetImg;
+              s.loadImage("/assets/coroa.png", (godImg) => {
+                godImage = godImg;
+                s.loadImage("/assets/energy.png", (energyImg) => {
+                  energyImage = energyImg;
+                  resolve();
+                });
+              });
+            });
           });
         });
       };
 
+      loadImages().then(() => {
+        currentPlanet = new Planet(s, s.width / 2, s.height / 2, 100, false, planetImage);
+        nextPlanet = Planet.generateNext(s, currentPlanet, planetImage);
+        prince = new Prince(s, currentPlanet, godImage);
+      }).catch((error) => {
+        console.error("Erro ao carregar as imagens:", error);
+      });
+
       s.draw = () => {
         if (!godImage || !prince || !currentPlanet || !nextPlanet) return;
+
+        // Desenhar o fundo com as estrelas
         s.background(0);
 
-        if (!perdeu && s.random() < 0.004) {
-          stars.push({
-            x: s.random(s.width),
-            y: -20,
-            vx: s.random(-6, -10),
-            vy: s.random(6, 10),
-            size: s.random(2, 4),
-            life: 60,
-            isShooting: true,
-            brightnessOffset: s.random(1000),
-            parallax: s.random(0.1, 0.3)
-          });
+        // Atualizar e exibir as estrelas
+        for (let i = 0; i < stars.length; i++) {
+          stars[i].twinkle();
+          stars[i].showStar(s);
         }
-
-        const yOffset = prince.pos.y - s.height / 2;
-        s.noStroke();
-        stars = stars.filter(star => {
-          if (star.isShooting) {
-            star.x += star.vx;
-            star.y += star.vy;
-            star.life--;
-            s.fill(255, 255, 200, s.map(star.life, 0, 60, 0, 255));
-            s.circle(star.x, star.y - yOffset * star.parallax, star.size);
-            return star.life > 0;
-          } else {
-            const brightness = 150 + 105 * s.sin(s.frameCount * 0.01 + star.brightnessOffset);
-            s.fill(brightness + s.random(-10, 10));
-            const sx = star.x;
-            const sy = star.y - yOffset * star.parallax;
-            if (sy > s.height + 20 || sx < -20 || sx > s.width + 20) {
-              Object.assign(star, createStar());
-            }
-            s.circle(sx, sy, star.size);
-            return true;
-          }
-        });
 
         s.push();
         targetZoom = prince.onPlanet ? 1 : 1.5;
@@ -126,10 +132,10 @@ const Game = () => {
           transitioning = true;
           score++;
           if (score % 3 === 0) showRandomPhrase();
-          if (score >= 10) rotationSpeed += 0.02;
-          if (score % 3 === 0) { prince.speed += 0.002; }
+          if (score % 3 === 0) { prince.speed += 0.01; }
 
           setTimeout(() => {
+            // Reciclagem de planetas: reaproveitando o planeta atual
             currentPlanet = nextPlanet;
             nextPlanet = Planet.generateNext(s, currentPlanet, planetImage);
             transitioning = false;
@@ -151,8 +157,15 @@ const Game = () => {
 
         s.fill(255);
         s.textSize(32);
-        s.textAlign(s.RIGHT, s.TOP);
-        s.text(`Pontuação: ${score}`, s.width - 20, 20);
+        s.textAlign(s.LEFT, s.TOP); // Alinhamento à esquerda do ponto (x, y)
+        s.image(awardImage, s.width / 10 - 100, 60, 40, 40);  // Ajuste o tamanho (40x40) conforme necessário
+        s.text(`${score}`, s.width / 10 - 50, 67);
+
+        s.fill(255);
+        s.textSize(32);
+        s.textAlign(s.LEFT, s.TOP); // Alinhamento à esquerda do ponto (x, y)
+        s.image(energyImage, s.width / 10 - 100, 110, 40, 40);  // Ajuste o tamanho (40x40) conforme necessário
+        s.text(`${Math.round(prince.speed * 100)}`, s.width / 10 - 50, 120);
 
         if (perdeu) {
           s.fill(255);
@@ -169,12 +182,22 @@ const Game = () => {
           if (fadeAlpha >= 255) reiniciarJogo();
         }
 
-        // Frase animada com fundo ajustado ao tamanho do texto
-        if ((messageVisible || fadeOutMessage) && message.length > 0) {
+        // Animação da frase
+        if ((messageVisible || fadeOutMessage) && fullMessage.length > 0) {
           s.push();
           s.resetMatrix();
           s.textSize(24);
           s.textAlign(s.CENTER, s.CENTER);
+
+          // Atualizar a digitação
+          if (!fadeOutMessage && charIndex < fullMessage.length) {
+            charIndex += 0.5;
+            message = fullMessage.substring(0, Math.floor(charIndex));
+            if (charIndex >= fullMessage.length) {
+              setTimeout(() => fadeOutMessage = true, 1200);
+            }
+          }
+
           const padding = 20;
           const textWidthValue = s.textWidth(message);
           const boxWidth = textWidthValue + padding * 2;
@@ -189,9 +212,7 @@ const Game = () => {
           s.text(message, s.width / 2, y + boxHeight / 2);
           s.pop();
 
-          if (fadeOutMessage) {
-            fadeOutText();
-          }
+          if (fadeOutMessage) fadeOutText();
         }
       };
 
@@ -202,54 +223,27 @@ const Game = () => {
       };
 
       s.windowResized = () => {
-        s.resizeCanvas(s.windowWidth, s.windowHeight);
+        s.resizeCanvas(s.windowWidth, s.windowHeight);  // Ajuste para redimensionar o canvas corretamente
       };
 
       function reiniciarJogo() {
         score = 0;
-        rotationSpeed = 0.01;
         perdeu = false;
         fadeAlpha = 0;
         startFadeOut = false;
-        stars = [];
-        for (let i = 0; i < numStars; i++) {
-          stars.push(createStar());
-        }
         currentPlanet = new Planet(s, s.width / 2, s.height / 2, 100, false, planetImage);
         nextPlanet = Planet.generateNext(s, currentPlanet, planetImage);
         prince = new Prince(s, currentPlanet, godImage);
       }
 
-      function createStar() {
-        return {
-          x: s.random(-s.width, s.width * 2),
-          y: s.random(-5000, 3000),
-          size: s.random(0.3, 5),
-          parallax: s.random(0.05, 0.6),
-          brightnessOffset: s.random(1000),
-          isShooting: false
-        };
-      }
-
+      // Função para mostrar a frase
       function showRandomPhrase() {
-        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+        fullMessage = phrases[Math.floor(Math.random() * phrases.length)];
         message = "";
+        charIndex = 0;
         messageVisible = true;
         messageAlpha = 1;
         fadeOutMessage = false;
-        messageStartTime = s.millis();
-        messageDuration = Math.max(phrase.length * 80, 3000);
-        const textObj = { textIndex: 0 };
-
-        const interval = setInterval(() => {
-          if (textObj.textIndex < phrase.length) {
-            message = phrase.substring(0, Math.floor(textObj.textIndex));
-            textObj.textIndex += 0.5;
-          } else {
-            clearInterval(interval);
-            setTimeout(() => fadeOutMessage = true, 1200);
-          }
-        }, 40);
       }
 
       function fadeOutText() {
@@ -261,14 +255,46 @@ const Game = () => {
           fadeOutMessage = false;
           messageAlpha = 1;
           message = "";
+          fullMessage = "";
+        }
+      }
+
+      // Classe Star
+      class Star {
+        constructor(tx, ty, tc, tf, td) {
+          this.x = tx;
+          this.y = ty;
+          this.c = tc;
+          this.f = tf;
+          this.down = td;
+        }
+
+        showStar(s) {
+          s.stroke(this.c);
+          s.point(this.x, this.y);
+        }
+
+        twinkle() {
+          if (this.c >= 255) {
+            this.down = true;
+          }
+          if (this.c <= 0) {
+            this.down = false;
+          }
+
+          if (this.down) {
+            this.c -= this.f;
+          } else {
+            this.c += this.f;
+          }
         }
       }
     }, sketchRef.current);
 
     return () => p.remove();
-  }, []);
+  }, [audio]);
 
-  return <div ref={sketchRef} style={{ width: "100vw", height: "100vh" }} />;
+  return <div ref={sketchRef} style={{ display: "flex", justifyContent: "center" }} />;
 };
 
 export default Game;
